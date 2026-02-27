@@ -1,0 +1,7 @@
+{
+  "name": "AI Companion: Theatre & Roundtable",
+  "description": "An AI companion app with real-time interaction, a live theatre mode for AI actors, an AI roundtable for open discussions, an avatar generator, and video creation capabilities, all powered by Gemini.",
+  "requestFramePermissions": [
+    "microphone"
+  ]
+}
