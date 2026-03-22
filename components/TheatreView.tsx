@@ -1,6 +1,6 @@
 import React, { useState, useRef, useEffect, Dispatch, SetStateAction } from 'react';
 import { Character, ChatMessage } from '../types';
-import { generateComplexText, generateSpeech, generateImage } from '../services/geminiService';
+import { generateComplexText, generateSpeech, generateImage, editImageWithText } from '../services/geminiService';
 import Message from './Message';
 import LoadingSpinner from './LoadingSpinner';
 import { Play, Square, Users, Wand2, Image as ImageIcon } from 'lucide-react';
@@ -35,6 +35,8 @@ const TheatreView: React.FC<TheatreViewProps> = ({
   const [isPerforming, setIsPerforming] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
   const [isGeneratingBg, setIsGeneratingBg] = useState(false);
+  const [editPrompt, setEditPrompt] = useState('');
+  const [isEditingBg, setIsEditingBg] = useState(false);
 
   const isPerformingRef = useRef(isPerforming);
   const audioContextRef = useRef<AudioContext | null>(null);
@@ -84,6 +86,27 @@ const TheatreView: React.FC<TheatreViewProps> = ({
       console.error("Error generating background:", error);
     } finally {
       setIsGeneratingBg(false);
+    }
+  };
+
+  const handleEditBackground = async () => {
+    if (!backgroundUrl || !editPrompt.trim()) return;
+    setIsEditingBg(true);
+    try {
+      const matches = backgroundUrl.match(/^data:(.+);base64,(.*)$/);
+      if (matches && matches.length === 3) {
+        const mimeType = matches[1];
+        const base64Data = matches[2];
+        const newImageUrl = await editImageWithText(base64Data, mimeType, editPrompt);
+        if (newImageUrl) {
+          setBackgroundUrl(newImageUrl);
+          setEditPrompt('');
+        }
+      }
+    } catch (error) {
+      console.error("Error editing background:", error);
+    } finally {
+      setIsEditingBg(false);
     }
   };
 
@@ -183,17 +206,35 @@ const TheatreView: React.FC<TheatreViewProps> = ({
         </div>
          <div>
           <h2 className="text-xl font-bold mb-3 flex items-center gap-2"><ImageIcon size={24} /> Set the Stage</h2>
-           <div className="flex gap-2">
-            <input
+           <div className="flex flex-col gap-2">
+            <textarea
               value={backgroundPrompt}
               onChange={e => setBackgroundPrompt(e.target.value)}
-              placeholder="e.g., a futuristic cityscape at night"
-              className="flex-1 p-2 bg-slate-900 rounded-lg border-slate-700 focus:ring-2 focus:ring-indigo-500"
+              placeholder="e.g., a futuristic cityscape at night with neon lights and flying cars"
+              className="w-full h-20 p-2 bg-slate-900 rounded-lg border-slate-700 focus:ring-2 focus:ring-indigo-500 resize-none text-sm"
               disabled={isPerforming || isGeneratingBg}
             />
-            <button onClick={handleGenerateBackground} disabled={isPerforming || isGeneratingBg || !backgroundPrompt.trim()} className="p-2 bg-teal-600 hover:bg-teal-500 rounded-lg text-white font-bold disabled:bg-slate-600 transition-colors">
-              {isGeneratingBg ? <LoadingSpinner/> : 'Set'}
+            <button onClick={handleGenerateBackground} disabled={isPerforming || isGeneratingBg || !backgroundPrompt.trim()} className="p-2 bg-teal-600 hover:bg-teal-500 rounded-lg text-white font-bold disabled:bg-slate-600 transition-colors flex justify-center items-center">
+              {isGeneratingBg ? <LoadingSpinner size="sm" /> : 'Generate Background'}
             </button>
+            
+            {backgroundUrl && (
+              <div className="mt-2 p-3 bg-slate-900/50 rounded-lg border border-slate-700">
+                <label className="block text-xs font-medium text-slate-400 mb-1">Adjust Background</label>
+                <div className="flex gap-2">
+                  <input
+                    value={editPrompt}
+                    onChange={e => setEditPrompt(e.target.value)}
+                    placeholder="e.g., make it darker, add a sepia filter"
+                    className="flex-1 p-2 bg-slate-900 rounded-lg border-slate-700 focus:ring-2 focus:ring-indigo-500 text-sm"
+                    disabled={isPerforming || isEditingBg}
+                  />
+                  <button onClick={handleEditBackground} disabled={isPerforming || isEditingBg || !editPrompt.trim()} className="p-2 bg-indigo-600 hover:bg-indigo-500 rounded-lg text-white font-bold disabled:bg-slate-600 transition-colors flex justify-center items-center" title="Apply Adjustment">
+                    {isEditingBg ? <LoadingSpinner size="sm" /> : <Wand2 size={18} />}
+                  </button>
+                </div>
+              </div>
+            )}
           </div>
         </div>
         <div className="mt-auto pt-4">

@@ -1,9 +1,10 @@
-import React, { useState, ChangeEvent } from 'react';
+import React, { useState, ChangeEvent, useRef } from 'react';
 import { Character } from '../types';
-import { generateComplexText, generateImage, editImageWithText } from '../services/geminiService';
+import { generateComplexText, generateImage, editImageWithText, generateSpeech } from '../services/geminiService';
 import LoadingSpinner from './LoadingSpinner';
 import { GEMINI_TTS_VOICES } from '../constants';
-import { Bot, Image as ImageIcon, Wand2, Save, X, Upload } from 'lucide-react';
+import { Bot, Image as ImageIcon, Wand2, Save, X, Upload, Play } from 'lucide-react';
+import { decode, decodeAudioData } from '../utils/audioUtils';
 
 interface AvatarGeneratorViewProps {
   onCharacterSaved: (character: Character) => void;
@@ -22,6 +23,40 @@ const AvatarGeneratorView: React.FC<AvatarGeneratorViewProps> = ({ onCharacterSa
   const [voice, setVoice] = useState(characterToEdit?.voice || GEMINI_TTS_VOICES[0]);
   const [isLoadingPersona, setIsLoadingPersona] = useState(false);
   const [isLoadingAvatar, setIsLoadingAvatar] = useState(false);
+  const [isPlayingVoice, setIsPlayingVoice] = useState(false);
+  const audioContextRef = useRef<AudioContext | null>(null);
+
+  const playAudio = async (base64Audio: string) => {
+    if (!audioContextRef.current) {
+        audioContextRef.current = new (window.AudioContext || (window as any).webkitAudioContext)({sampleRate: 24000});
+    }
+    const audioContext = audioContextRef.current;
+    try {
+        const audioBuffer = await decodeAudioData(decode(base64Audio), audioContext, 24000, 1);
+        const source = audioContext.createBufferSource();
+        source.buffer = audioBuffer;
+        source.connect(audioContext.destination);
+        source.start();
+        return new Promise(resolve => source.onended = resolve);
+    } catch (error) {
+        console.error("Error playing audio:", error);
+    }
+  };
+
+  const handlePreviewVoice = async () => {
+    setIsPlayingVoice(true);
+    try {
+      const phrase = `Hello, I am ${name || 'your AI companion'}.`;
+      const audioData = await generateSpeech(phrase, voice);
+      if (audioData) {
+        await playAudio(audioData);
+      }
+    } catch (error) {
+      console.error("Error previewing voice:", error);
+    } finally {
+      setIsPlayingVoice(false);
+    }
+  };
 
   const handleImageUpload = (e: ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
@@ -125,9 +160,19 @@ const AvatarGeneratorView: React.FC<AvatarGeneratorViewProps> = ({ onCharacterSa
 
           <div>
             <label className="block text-sm font-medium text-gray-300 mb-1">Voice</label>
-            <select value={voice} onChange={e => setVoice(e.target.value)} className="w-full p-2 bg-gray-900/50 rounded-lg border-none focus:ring-2 focus:ring-indigo-500">
-              {GEMINI_TTS_VOICES.map(v => <option key={v} value={v} className="bg-gray-800 text-white">{v}</option>)}
-            </select>
+            <div className="flex gap-2">
+              <select value={voice} onChange={e => setVoice(e.target.value)} className="flex-1 p-2 bg-gray-900/50 rounded-lg border-none focus:ring-2 focus:ring-indigo-500">
+                {GEMINI_TTS_VOICES.map(v => <option key={v} value={v} className="bg-gray-800 text-white">{v}</option>)}
+              </select>
+              <button 
+                onClick={handlePreviewVoice} 
+                disabled={isPlayingVoice}
+                className="p-2 bg-indigo-600 hover:bg-indigo-500 rounded-lg text-white font-bold disabled:bg-gray-600 transition-colors flex items-center justify-center"
+                title="Preview Voice"
+              >
+                {isPlayingVoice ? <LoadingSpinner size="sm" /> : <Play size={18} />}
+              </button>
+            </div>
           </div>
         </div>
 
